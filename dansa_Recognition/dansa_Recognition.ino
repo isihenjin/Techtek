@@ -1,8 +1,17 @@
+//段差認識用のモデルを用いると認識結果の値がおかしくなる不具合あり
+
+/*典型的なエラー
+・dnnrt.begin failed -1 :nnbfile をロードするためのメモリ領域がありません
+  →ArduinoIDEの「ツール」→Memoryを1536KBに変更
+
+  dnnrt.begin failed -1 :学習モデルサイズが大きすぎてSDカードからロードできない
+*/
+
 #include <Camera.h>
 #include <SPI.h>
 #include <EEPROM.h>
-#include <DNNRT.h>   //組み込みAIライブラリ
-#include "Adafruit_ILI9341.h"  //ディスプレイ
+#include <DNNRT.h>
+#include "Adafruit_ILI9341.h"
 
 #include <SDHCI.h>
 SDClass theSD;
@@ -12,17 +21,20 @@ SDClass theSD;
 #define TFT_DC  9
 #define TFT_CS  10
 
-//入力画像のサイズ（学習済モデルの画像サイズに合わせる）
-#define DNN_IMG_W 28
-#define DNN_IMG_H 28
-//カメラ画像サイズ
+//キャプチャするウィンドウのサイズ すべて偶数で定義しないとエラー
+
+////入力画像のサイズ（学習済モデルの画像サイズに合わせる？）
+////CAM_CLIPで切り取る範囲の2^n乗サイズにしないとエラー
+#define DNN_IMG_W 80
+#define DNN_IMG_H 60
+
 #define CAM_IMG_W 320
 #define CAM_IMG_H 240
 //カメラ画像から切り取る範囲の定義
-#define CAM_CLIP_X 104
-#define CAM_CLIP_Y 0
-#define CAM_CLIP_W 112
-#define CAM_CLIP_H 224
+#define CAM_CLIP_X 80
+#define CAM_CLIP_Y 60
+#define CAM_CLIP_W 160
+#define CAM_CLIP_H 120
 
 #define LINE_THICKNESS 5
 
@@ -32,8 +44,7 @@ uint8_t buf[DNN_IMG_W*DNN_IMG_H];
 
 DNNRT dnnrt;
 DNNVariable input(DNN_IMG_W*DNN_IMG_H);
-
-
+  
 static uint8_t const label[11] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
 //ディスプレイに文字列を表示
@@ -98,8 +109,6 @@ void CamCB(CamImage img) {
   }
   
   String gStrResult = "?";
-
-  //推論の実行
   dnnrt.inputVariable(input, 0);
   dnnrt.forward();
   DNNVariable output = dnnrt.outputVariable(0);
@@ -115,7 +124,6 @@ void CamCB(CamImage img) {
   img.convertPixFormat(CAM_IMAGE_PIX_FMT_RGB565);
   uint16_t* imgBuf = (uint16_t*)img.getImgBuff(); 
 
-  //推論結果のディスプレイ表示
   drawBox(imgBuf); 
   tft.drawRGBBitmap(0, 0, (uint16_t *)img.getImgBuff(), 320, 224);
   putStringOnLcd(gStrResult, ILI9341_YELLOW);
@@ -129,17 +137,10 @@ void setup() {
   tft.setRotation(3);
 
   while (!theSD.begin()) { putStringOnLcd("Insert SD card", ILI9341_RED); }
-  
-  //学習済モデルの読み込み
+  //学習モデルの読み込み
   File nnbfile = theSD.open("model.nnb");
-  //ファイルが読み込めてるか確認
-  // if (nnbfile = NULL){
-  //   putStringOnLcd("file open failed" , ILI9341_RED);
-  // }else{
-  //   putStringOnLcd("file opened! " +String(nnbfile), ILI9341_RED);
-  // }
 
-  //学習済モデルでDNNRTを開始
+    //学習済モデルでDNNRTを開始
   //DNNRTを学習済モデルで初期化
   int ret = dnnrt.begin(nnbfile);
   if (ret < 0) {

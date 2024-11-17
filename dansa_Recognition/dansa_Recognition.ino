@@ -12,7 +12,8 @@
 #include <EEPROM.h>
 #include <DNNRT.h>
 #include "Adafruit_ILI9341.h"
-
+#include <Audio.h>
+AudioClass *theAudio;
 #include <SDHCI.h>
 SDClass theSD;
 
@@ -35,7 +36,7 @@ SDClass theSD;
 #define CAM_CLIP_Y 60
 #define CAM_CLIP_W 160
 #define CAM_CLIP_H 120
-
+#define PIN1 0
 #define LINE_THICKNESS 5
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(&SPI, TFT_DC, TFT_CS, TFT_RST);
@@ -45,7 +46,7 @@ uint8_t buf[DNN_IMG_W*DNN_IMG_H];
 DNNRT dnnrt;
 DNNVariable input(DNN_IMG_W*DNN_IMG_H);
   
-static uint8_t const label[11] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+static String const label[2] = {"dansa","notdansa"};
 
 //ディスプレイに文字列を表示
 void putStringOnLcd(String str, int color) {
@@ -114,8 +115,14 @@ void CamCB(CamImage img) {
   DNNVariable output = dnnrt.outputVariable(0);
   int index = output.maxIndex();
   
-  if (index < 10) {
+  if (index < 2) {
     gStrResult = String(label[index]) + String(":") + String(output[index]);
+    if(output[0]>=0.9){
+      analogWrite(PIN1,255);
+      }else{
+        
+      analogWrite(PIN1,0);
+      }
   } else {
     gStrResult = String("?:") + String(output[index]);
   }
@@ -131,11 +138,15 @@ void CamCB(CamImage img) {
 
 
 void setup() {   
+  pinMode(PIN1 , OUTPUT);
   Serial.begin(115200);
- 
   tft.begin();
   tft.setRotation(3);
-
+//  theAudio=AudioClass::getInstance();
+//  theAudio->begin();
+//  puts("bigin");
+//  theAudio->setPlayerMode(AS_SETPLAYER_OUTPUTDEVICE_SPHP,0,0);
+//  theAudio->setBeep(1,0,1500);
   while (!theSD.begin()) { putStringOnLcd("Insert SD card", ILI9341_RED); }
   //学習モデルの読み込み
   File nnbfile = theSD.open("model.nnb");

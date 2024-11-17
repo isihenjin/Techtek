@@ -45,7 +45,9 @@ uint8_t buf[DNN_IMG_W*DNN_IMG_H];
 
 DNNRT dnnrt;
 DNNVariable input(DNN_IMG_W*DNN_IMG_H);
-  
+int delayTime=300;
+bool allowBEEP=false;
+int count=0;
 static String const label[2] = {"dansa","notdansa"};
 
 //ディスプレイに文字列を表示
@@ -117,12 +119,11 @@ void CamCB(CamImage img) {
   
   if (index < 2) {
     gStrResult = String(label[index]) + String(":") + String(output[index]);
-    if(output[0]>=0.9){
-      analogWrite(PIN1,255);
-      }else{
-        
-      analogWrite(PIN1,0);
-      }
+    float normalized = (float)output[1]; // LONG_MAX を使って 0.0～1.0 に正規化
+    if (normalized < 0.0f) normalized = 0.0f;         // 範囲外の保護
+    if (normalized > 1.0f) normalized = 1.0f;
+
+    delayTime = (int)(normalized * (1000 - 50) + 50);
   } else {
     gStrResult = String("?:") + String(output[index]);
   }
@@ -142,11 +143,11 @@ void setup() {
   Serial.begin(115200);
   tft.begin();
   tft.setRotation(3);
-//  theAudio=AudioClass::getInstance();
-//  theAudio->begin();
-//  puts("bigin");
-//  theAudio->setPlayerMode(AS_SETPLAYER_OUTPUTDEVICE_SPHP,0,0);
-//  theAudio->setBeep(1,0,1500);
+  theAudio=AudioClass::getInstance();
+  theAudio->begin();
+  puts("bigin");
+  theAudio->setPlayerMode(AS_SETPLAYER_OUTPUTDEVICE_SPHP,0,0);
+  theAudio->setBeep(1,-20,700);
   while (!theSD.begin()) { putStringOnLcd("Insert SD card", ILI9341_RED); }
   //学習モデルの読み込み
   File nnbfile = theSD.open("model.nnb");
@@ -163,4 +164,15 @@ void setup() {
   theCamera.startStreaming(true, CamCB);
 }
 
-void loop() { }
+void loop() { 
+  count++;
+  if(count>delayTime){
+  theAudio->setBeep(1,-20,1000);
+  analogWrite(PIN1,255);
+  delay(50);
+  theAudio->setBeep(0,0,0);
+  analogWrite(PIN1,0);
+  count=0;
+  }
+  delay(1);
+  }
